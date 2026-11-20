@@ -26,6 +26,15 @@ data class TransformTrack(
 enum class ShapeKind { RECTANGLE, CIRCLE, ROUNDED_RECT }
 
 @Serializable
+data class AudioTrack(
+    val uriString: String,
+    val name: String = "Audio Track",
+    val startTimeMs: Long = 0L,
+    val trimStartMs: Long = 0L,
+    val volume: Float = 1f
+)
+
+@Serializable
 sealed interface Layer {
     val id: String
     val name: String
@@ -81,7 +90,8 @@ data class Project(
     val fps: Int = 30,
     val durationMs: Long = 5000L,
     val backgroundColorHex: Long = 0xFF0F172A,
-    val layers: List<Layer> = emptyList()
+    val layers: List<Layer> = emptyList(),
+    val audio: AudioTrack? = null
 ) {
     fun toJson(): String = projectJson.encodeToString(this)
     companion object {

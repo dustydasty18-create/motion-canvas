@@ -1,6 +1,8 @@
 package com.mohammed.motioncanvas
 
 import android.content.Intent
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -52,22 +54,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ColorSwatchRow(label: String, selectedHex: Long, onSelect: (Long) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(42.dp))
         SWATCH_COLORS.forEach { hex ->
             val isSelected = hex == selectedHex
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(Color(hex.toInt()))
-                    .border(if (isSelected) 2.5.dp else 1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.3f), CircleShape)
-                    .clickable { onSelect(hex) }
-            )
+            Box(Modifier.size(24.dp).clip(CircleShape).background(Color(hex.toInt())).border(if (isSelected) 2.5.dp else 1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.3f), CircleShape).clickable { onSelect(hex) })
         }
     }
 }
@@ -79,16 +70,11 @@ fun KeyframeTrackBar(totalDurationMs: Long, keyTimesMs: List<Long>, activeStartM
         val startX = ((activeStartMs / dur).coerceIn(0f, 1f)) * size.width
         val endX = ((activeEndMs / dur).coerceIn(0f, 1f)) * size.width
         drawLine(Color.White.copy(alpha = 0.15f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), strokeWidth = 3f)
-        if (endX > startX) {
-            drawLine(Color(0xFF3B82F6).copy(alpha = 0.65f), Offset(startX, size.height / 2f), Offset(endX, size.height / 2f), strokeWidth = 6f)
-        }
-        val r = 6.dp.toPx()
-        val cy = size.height / 2f
+        if (endX > startX) drawLine(Color(0xFF3B82F6).copy(alpha = 0.65f), Offset(startX, size.height / 2f), Offset(endX, size.height / 2f), strokeWidth = 6f)
+        val r = 6.dp.toPx(); val cy = size.height / 2f
         keyTimesMs.forEach { t ->
             val cx = ((t / dur).coerceIn(0f, 1f)) * size.width
-            val diamond = Path().apply {
-                moveTo(cx, cy - r); lineTo(cx + r, cy); lineTo(cx, cy + r); lineTo(cx - r, cy); close()
-            }
+            val diamond = Path().apply { moveTo(cx, cy - r); lineTo(cx + r, cy); lineTo(cx, cy + r); lineTo(cx - r, cy); close() }
             drawPath(diamond, Color(0xFFF59E0B))
         }
     }
@@ -113,11 +99,37 @@ fun MotionEditorScreen() {
         updateProject(project.copy(layers = project.layers.map { if (it.id == id) fn(it) else it }))
     }
 
+    val mediaPlayer = remember(project.audio?.uriString) {
+        project.audio?.let { track ->
+            runCatching { MediaPlayer().apply { setDataSource(context, Uri.parse(track.uriString)); prepare() } }.getOrNull()
+        }
+    }
+    DisposableEffect(mediaPlayer) { onDispose { runCatching { mediaPlayer?.release() } } }
+
+    LaunchedEffect(isPlaying, mediaPlayer, project.audio) {
+        val mp = mediaPlayer ?: return@LaunchedEffect
+        val audio = project.audio ?: return@LaunchedEffect
+        if (isPlaying) {
+            val targetMs = (currentTimeMs - audio.startTimeMs + audio.trimStartMs).toInt()
+            if (targetMs >= 0 && targetMs < mp.duration) {
+                mp.setVolume(audio.volume, audio.volume); mp.seekTo(targetMs); mp.start()
+            }
+        } else if (mp.isPlaying) { mp.pause() }
+    }
+
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             val l = Layer.ImageLayer(name = "Image ${project.layers.size + 1}", durationMs = project.durationMs, uriString = uri.toString())
             updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id
+        }
+    }
+    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            val trackName = uri.lastPathSegment?.substringAfterLast('/') ?: "Audio Track"
+            updateProject(project.copy(audio = AudioTrack(uriString = uri.toString(), name = trackName)))
+            Toast.makeText(context, "Audio added: $trackName", Toast.LENGTH_SHORT).show()
         }
     }
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -133,7 +145,11 @@ fun MotionEditorScreen() {
         var lastNanos = withFrameNanos { it }
         while (isPlaying) {
             val now = withFrameNanos { it }
-            currentTimeMs = (currentTimeMs + (now - lastNanos) / 1_000_000L) % project.durationMs
+            val next = currentTimeMs + (now - lastNanos) / 1_000_000L
+            if (next >= project.durationMs) {
+                currentTimeMs = 0L
+                project.audio?.let { a -> mediaPlayer?.let { mp -> val t = a.trimStartMs.toInt(); if (t < mp.duration) mp.seekTo(t) } }
+            } else currentTimeMs = next
             lastNanos = now
         }
     }
@@ -158,17 +174,18 @@ fun MotionEditorScreen() {
         if (exportProgress != null) { Spacer(Modifier.height(4.dp)); LinearProgressIndicator(progress = { exportProgress ?: 0f }, modifier = Modifier.fillMaxWidth()) }
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf(3000L, 5000L, 8000L, 10000L, 15000L).forEach { dur ->
-                FilterChip(selected = project.durationMs == dur, onClick = {
-                    currentTimeMs = currentTimeMs.coerceAtMost(dur)
-                    updateProject(project.copy(durationMs = dur))
-                }, label = { Text("${dur / 1000}s") })
-            }
-            listOf(24, 30, 60).forEach { f ->
-                FilterChip(selected = project.fps == f, onClick = { updateProject(project.copy(fps = f)) }, label = { Text("${f}fps") })
-            }
+            listOf(3000L, 5000L, 8000L, 10000L, 15000L).forEach { dur -> FilterChip(selected = project.durationMs == dur, onClick = { currentTimeMs = currentTimeMs.coerceAtMost(dur); updateProject(project.copy(durationMs = dur)) }, label = { Text("${dur / 1000}s") }) }
+            listOf(24, 30, 60).forEach { f -> FilterChip(selected = project.fps == f, onClick = { updateProject(project.copy(fps = f)) }, label = { Text("${f}fps") }) }
         }
         ColorSwatchRow("Stage", project.backgroundColorHex) { hex -> updateProject(project.copy(backgroundColorHex = hex)) }
+        if (project.audio != null) {
+            val a = project.audio!!
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("🎵 ${a.name.take(12)} | Trim:${String.format("%.1fs", a.trimStartMs / 1000f)}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(145.dp))
+                Slider(value = a.trimStartMs.toFloat(), onValueChange = { t -> isPlaying = false; updateProject(project.copy(audio = a.copy(trimStartMs = t.toLong()))) }, valueRange = 0f..30000f, modifier = Modifier.weight(1f))
+                TextButton(onClick = { isPlaying = false; updateProject(project.copy(audio = null)) }) { Text("X", color = MaterialTheme.colorScheme.error) }
+            }
+        }
         Spacer(Modifier.height(4.dp))
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (showJson) {
@@ -181,14 +198,7 @@ fun MotionEditorScreen() {
             }
         }
         Spacer(Modifier.height(4.dp))
-        if (selectedLayer != null) {
-            KeyframeTrackBar(
-                totalDurationMs = project.durationMs,
-                keyTimesMs = selectedLayer.keyframeGlobalTimesFor(selectedProp),
-                activeStartMs = selectedLayer.startTimeMs,
-                activeEndMs = selectedLayer.startTimeMs + selectedLayer.durationMs
-            )
-        }
+        if (selectedLayer != null) KeyframeTrackBar(project.durationMs, selectedLayer.keyframeGlobalTimesFor(selectedProp), selectedLayer.startTimeMs, selectedLayer.startTimeMs + selectedLayer.durationMs)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = { isPlaying = !isPlaying }) { Text(if (isPlaying) "Pause" else "Play") }
             Spacer(Modifier.width(8.dp))
@@ -200,6 +210,7 @@ fun MotionEditorScreen() {
             FilledTonalButton(onClick = { val l = Layer.TextLayer(name = "Text ${project.layers.size + 1}", text = "New Text", durationMs = project.durationMs); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }) { Text("+ Text") }
             FilledTonalButton(onClick = { val l = Layer.ShapeLayer(name = "Shape ${project.layers.size + 1}", durationMs = project.durationMs); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }) { Text("+ Shape") }
             FilledTonalButton(onClick = { imagePicker.launch(arrayOf("image/*")) }) { Text("+ Image") }
+            FilledTonalButton(onClick = { audioPicker.launch(arrayOf("audio/*")) }) { Text("+ Audio") }
             project.layers.forEach { layer -> FilterChip(selected = layer.id == selectedLayerId, onClick = { selectedLayerId = layer.id }, label = { Text(layer.name) }) }
             if (selectedLayer != null) {
                 OutlinedButton(onClick = { updateProject(project.moveLayer(selectedLayer.id, 1)) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Front") }
@@ -209,7 +220,7 @@ fun MotionEditorScreen() {
         if (selectedLayer != null) {
             val eval = KeyframeInterpolator.evaluateTrack(selectedLayer.transform, (currentTimeMs - selectedLayer.startTimeMs).coerceIn(0L, selectedLayer.durationMs))
             val curVal = when (selectedProp) { TrackProperty.X -> eval.x; TrackProperty.Y -> eval.y; TrackProperty.SCALE -> eval.scaleX; TrackProperty.ROTATION -> eval.rotation; TrackProperty.OPACITY -> eval.opacity }
-            Column(Modifier.fillMaxWidth().heightIn(max = 230.dp).verticalScroll(rememberScrollState()).background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(8.dp)) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()).background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("In: ${String.format("%.1fs", selectedLayer.startTimeMs / 1000f)}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(56.dp))
                     Slider(value = selectedLayer.startTimeMs.toFloat(), onValueChange = { s -> updateSelectedLayer { it.withTiming(s.toLong(), it.durationMs) } }, valueRange = 0f..(project.durationMs - 200L).coerceAtLeast(200L).toFloat(), modifier = Modifier.weight(1f))
