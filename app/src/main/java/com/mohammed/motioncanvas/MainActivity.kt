@@ -23,7 +23,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
@@ -60,16 +62,34 @@ fun ColorSwatchRow(label: String, selectedHex: Long, onSelect: (Long) -> Unit) {
             val isSelected = hex == selectedHex
             Box(
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(24.dp)
                     .clip(CircleShape)
                     .background(Color(hex.toInt()))
-                    .border(
-                        width = if (isSelected) 2.5.dp else 1.dp,
-                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.3f),
-                        shape = CircleShape
-                    )
+                    .border(if (isSelected) 2.5.dp else 1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.3f), CircleShape)
                     .clickable { onSelect(hex) }
             )
+        }
+    }
+}
+
+@Composable
+fun KeyframeTrackBar(totalDurationMs: Long, keyTimesMs: List<Long>, activeStartMs: Long, activeEndMs: Long) {
+    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp).padding(horizontal = 10.dp)) {
+        val dur = totalDurationMs.coerceAtLeast(1L).toFloat()
+        val startX = ((activeStartMs / dur).coerceIn(0f, 1f)) * size.width
+        val endX = ((activeEndMs / dur).coerceIn(0f, 1f)) * size.width
+        drawLine(Color.White.copy(alpha = 0.15f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), strokeWidth = 3f)
+        if (endX > startX) {
+            drawLine(Color(0xFF3B82F6).copy(alpha = 0.65f), Offset(startX, size.height / 2f), Offset(endX, size.height / 2f), strokeWidth = 6f)
+        }
+        val r = 6.dp.toPx()
+        val cy = size.height / 2f
+        keyTimesMs.forEach { t ->
+            val cx = ((t / dur).coerceIn(0f, 1f)) * size.width
+            val diamond = Path().apply {
+                moveTo(cx, cy - r); lineTo(cx + r, cy); lineTo(cx, cy + r); lineTo(cx - r, cy); close()
+            }
+            drawPath(diamond, Color(0xFFF59E0B))
         }
     }
 }
@@ -88,16 +108,16 @@ fun MotionEditorScreen() {
     var exportProgress by remember { mutableStateOf<Float?>(null) }
 
     fun updateProject(newProject: Project) { project = newProject; ProjectStorage.saveAuto(context, newProject) }
-    fun updateSelectedLayer(transformFn: (Layer) -> Layer) {
+    fun updateSelectedLayer(fn: (Layer) -> Layer) {
         val id = selectedLayerId ?: return
-        updateProject(project.copy(layers = project.layers.map { if (it.id == id) transformFn(it) else it }))
+        updateProject(project.copy(layers = project.layers.map { if (it.id == id) fn(it) else it }))
     }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            val newLayer = Layer.ImageLayer(name = "Image ${project.layers.size + 1}", uriString = uri.toString())
-            updateProject(project.copy(layers = project.layers + newLayer)); selectedLayerId = newLayer.id
+            val l = Layer.ImageLayer(name = "Image ${project.layers.size + 1}", durationMs = project.durationMs, uriString = uri.toString())
+            updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id
         }
     }
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -119,7 +139,7 @@ fun MotionEditorScreen() {
     }
 
     val selectedLayer = project.layers.find { it.id == selectedLayerId }
-    Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(12.dp)) {
+    Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(10.dp)) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(enabled = exportProgress == null, onClick = {
                 isPlaying = false; exportProgress = 0f
@@ -129,16 +149,27 @@ fun MotionEditorScreen() {
                     res.onSuccess { path -> Toast.makeText(context, "Saved: $path", Toast.LENGTH_LONG).show() }
                        .onFailure { err -> Toast.makeText(context, "Export error: ${err.message}", Toast.LENGTH_LONG).show() }
                 }
-            }) { Text(if (exportProgress != null) "Exporting ${(exportProgress!! * 100).toInt()}%" else "Export MP4") }
-            OutlinedButton(onClick = { exportJson.launch("${project.title}.json") }) { Text("Save JSON") }
-            OutlinedButton(onClick = { importJson.launch(arrayOf("application/json", "*/*")) }) { Text("Load JSON") }
-            OutlinedButton(onClick = { showJson = !showJson }) { Text(if (showJson) "Canvas" else "Code") }
+            }) { Text(if (exportProgress != null) "${(exportProgress!! * 100).toInt()}%" else "Export MP4") }
+            OutlinedButton(onClick = { exportJson.launch("${project.title}.json") }) { Text("Save") }
+            OutlinedButton(onClick = { importJson.launch(arrayOf("application/json", "*/*")) }) { Text("Load") }
+            OutlinedButton(onClick = { showJson = !showJson }) { Text(if (showJson) "Stage" else "JSON") }
             OutlinedButton(onClick = { val d = Project.sampleDemo(); updateProject(d); selectedLayerId = d.layers.firstOrNull()?.id }) { Text("Reset") }
         }
-        if (exportProgress != null) { Spacer(Modifier.height(6.dp)); LinearProgressIndicator(progress = { exportProgress ?: 0f }, modifier = Modifier.fillMaxWidth()) }
-        Spacer(Modifier.height(6.dp))
+        if (exportProgress != null) { Spacer(Modifier.height(4.dp)); LinearProgressIndicator(progress = { exportProgress ?: 0f }, modifier = Modifier.fillMaxWidth()) }
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf(3000L, 5000L, 8000L, 10000L, 15000L).forEach { dur ->
+                FilterChip(selected = project.durationMs == dur, onClick = {
+                    currentTimeMs = currentTimeMs.coerceAtMost(dur)
+                    updateProject(project.copy(durationMs = dur))
+                }, label = { Text("${dur / 1000}s") })
+            }
+            listOf(24, 30, 60).forEach { f ->
+                FilterChip(selected = project.fps == f, onClick = { updateProject(project.copy(fps = f)) }, label = { Text("${f}fps") })
+            }
+        }
         ColorSwatchRow("Stage", project.backgroundColorHex) { hex -> updateProject(project.copy(backgroundColorHex = hex)) }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (showJson) {
                 Text(remember(project) { project.toJson() }, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
@@ -149,7 +180,15 @@ fun MotionEditorScreen() {
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
+        if (selectedLayer != null) {
+            KeyframeTrackBar(
+                totalDurationMs = project.durationMs,
+                keyTimesMs = selectedLayer.keyframeGlobalTimesFor(selectedProp),
+                activeStartMs = selectedLayer.startTimeMs,
+                activeEndMs = selectedLayer.startTimeMs + selectedLayer.durationMs
+            )
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = { isPlaying = !isPlaying }) { Text(if (isPlaying) "Pause" else "Play") }
             Spacer(Modifier.width(8.dp))
@@ -157,13 +196,10 @@ fun MotionEditorScreen() {
             Spacer(Modifier.width(8.dp))
             Slider(value = currentTimeMs.toFloat(), onValueChange = { isPlaying = false; currentTimeMs = it.toLong() }, valueRange = 0f..project.durationMs.toFloat(), modifier = Modifier.weight(1f))
         }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilledTonalButton(onClick = { val l = Layer.TextLayer(name = "Text ${project.layers.size + 1}", text = "New Text"); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }) { Text("+ Text") }
-            FilledTonalButton(onClick = { val l = Layer.ShapeLayer(name = "Shape ${project.layers.size + 1}"); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }) { Text("+ Shape") }
-            FilledTonalButton(onClick = { imagePicker.launch(arrayOf("image/*")) }) { Text("+ Image") }
-        }
-        Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            FilledTonalButton(onClick = { val l = Layer.TextLayer(name = "Text ${project.layers.size + 1}", text = "New Text", durationMs = project.durationMs); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }) { Text("+ Text") }
+            FilledTonalButton(onClick = { val l = Layer.ShapeLayer(name = "Shape ${project.layers.size + 1}", durationMs = project.durationMs); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }) { Text("+ Shape") }
+            FilledTonalButton(onClick = { imagePicker.launch(arrayOf("image/*")) }) { Text("+ Image") }
             project.layers.forEach { layer -> FilterChip(selected = layer.id == selectedLayerId, onClick = { selectedLayerId = layer.id }, label = { Text(layer.name) }) }
             if (selectedLayer != null) {
                 OutlinedButton(onClick = { updateProject(project.moveLayer(selectedLayer.id, 1)) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Front") }
@@ -173,7 +209,13 @@ fun MotionEditorScreen() {
         if (selectedLayer != null) {
             val eval = KeyframeInterpolator.evaluateTrack(selectedLayer.transform, (currentTimeMs - selectedLayer.startTimeMs).coerceIn(0L, selectedLayer.durationMs))
             val curVal = when (selectedProp) { TrackProperty.X -> eval.x; TrackProperty.Y -> eval.y; TrackProperty.SCALE -> eval.scaleX; TrackProperty.ROTATION -> eval.rotation; TrackProperty.OPACITY -> eval.opacity }
-            Column(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(8.dp)) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 230.dp).verticalScroll(rememberScrollState()).background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("In: ${String.format("%.1fs", selectedLayer.startTimeMs / 1000f)}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(56.dp))
+                    Slider(value = selectedLayer.startTimeMs.toFloat(), onValueChange = { s -> updateSelectedLayer { it.withTiming(s.toLong(), it.durationMs) } }, valueRange = 0f..(project.durationMs - 200L).coerceAtLeast(200L).toFloat(), modifier = Modifier.weight(1f))
+                    Text("Dur: ${String.format("%.1fs", selectedLayer.durationMs / 1000f)}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(62.dp))
+                    Slider(value = selectedLayer.durationMs.toFloat(), onValueChange = { d -> updateSelectedLayer { it.withTiming(it.startTimeMs, d.toLong().coerceAtLeast(200L)) } }, valueRange = 200f..project.durationMs.toFloat(), modifier = Modifier.weight(1f))
+                }
                 if (selectedLayer is Layer.TextLayer) {
                     OutlinedTextField(value = selectedLayer.text, onValueChange = { txt -> updateSelectedLayer { selectedLayer.copy(text = txt) } }, label = { Text("Text") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Row(verticalAlignment = Alignment.CenterVertically) {
