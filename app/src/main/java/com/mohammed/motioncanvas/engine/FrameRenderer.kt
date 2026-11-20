@@ -1,3 +1,5 @@
+import com.mohammed.motioncanvas.model.BlendModeKind
+import com.mohammed.motioncanvas.model.LayerEffects
 package com.mohammed.motioncanvas.engine
 
 import android.content.Context
@@ -40,8 +42,21 @@ class FrameRenderer(private val context: Context) {
         }
     }
 
+    private fun applyEffects(paint: Paint, fx: LayerEffects, opacity: Float) {
+        paint.xfermode = when (fx.blendMode) {
+            BlendModeKind.NORMAL -> null
+            BlendModeKind.ADD -> PorterDuffXfermode(PorterDuff.Mode.ADD)
+            BlendModeKind.SCREEN -> PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+            BlendModeKind.MULTIPLY -> PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
+            BlendModeKind.OVERLAY -> PorterDuffXfermode(PorterDuff.Mode.OVERLAY)
+        }
+        paint.maskFilter = if (fx.blurRadius > 0.5f) BlurMaskFilter(fx.blurRadius, BlurMaskFilter.Blur.NORMAL) else null
+        if (fx.shadowRadius > 0.5f) paint.setShadowLayer(fx.shadowRadius, fx.shadowDx, fx.shadowDy, applyAlpha(fx.shadowColorHex.toInt(), opacity))
+        else paint.clearShadowLayer()
+    }
+
     private fun drawShape(canvas: Canvas, layer: Layer.ShapeLayer, opacity: Float) {
-        shapePaint.color = applyAlpha(layer.colorHex.toInt(), opacity)
+        shapePaint.color = applyAlpha(layer.colorHex.toInt(), opacity); applyEffects(shapePaint, layer.effects, opacity)
         val hw = layer.widthPx / 2f
         val hh = layer.heightPx / 2f
         val rect = RectF(-hw, -hh, hw, hh)
@@ -53,7 +68,7 @@ class FrameRenderer(private val context: Context) {
     }
 
     private fun drawText(canvas: Canvas, layer: Layer.TextLayer, opacity: Float) {
-        textPaint.color = applyAlpha(layer.colorHex.toInt(), opacity)
+        textPaint.color = applyAlpha(layer.colorHex.toInt(), opacity); applyEffects(textPaint, layer.effects, opacity)
         textPaint.textSize = layer.fontSizeSp * 2.5f
         val fm = textPaint.fontMetrics
         val baselineOffset = -(fm.ascent + fm.descent) / 2f

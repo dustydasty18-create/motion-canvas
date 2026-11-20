@@ -271,6 +271,16 @@ fun MotionEditorScreen() {
                     }
                     ColorSwatchRow("Color", selectedLayer.colorHex) { hex -> updateSelectedLayer { it.withColor(hex) } }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Shadow: ${selectedLayer.effects.shadowRadius.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(72.dp))
+                    Slider(value = selectedLayer.effects.shadowRadius, onValueChange = { r -> updateSelectedLayer { it.withEffects(it.effects.copy(shadowRadius = r)) } }, valueRange = 0f..60f, modifier = Modifier.weight(1f))
+                    Text("Blur: ${selectedLayer.effects.blurRadius.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(56.dp))
+                    Slider(value = selectedLayer.effects.blurRadius, onValueChange = { b -> updateSelectedLayer { it.withEffects(it.effects.copy(blurRadius = b)) } }, valueRange = 0f..40f, modifier = Modifier.weight(1f))
+                }
+                ColorSwatchRow("Glow", selectedLayer.effects.shadowColorHex) { hex -> updateSelectedLayer { it.withEffects(it.effects.copy(shadowColorHex = hex)) } }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BlendModeKind.entries.forEach { bm -> FilterChip(selected = selectedLayer.effects.blendMode == bm, onClick = { updateSelectedLayer { it.withEffects(it.effects.copy(blendMode = bm)) } }, label = { Text(bm.name) }) }
+                }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     TrackProperty.entries.forEach { p -> FilterChip(selected = selectedProp == p, onClick = { selectedProp = p }, label = { Text(p.label) }) }
                     TextButton(onClick = { val rem = project.layers.filterNot { it.id == selectedLayer.id }; updateProject(project.copy(layers = rem)); selectedLayerId = rem.firstOrNull()?.id }) { Text("Delete", color = MaterialTheme.colorScheme.error) }

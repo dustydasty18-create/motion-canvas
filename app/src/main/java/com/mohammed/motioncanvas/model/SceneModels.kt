@@ -10,6 +10,19 @@ import java.util.UUID
 enum class EasingType { LINEAR, EASE_IN, EASE_OUT, EASE_IN_OUT }
 
 @Serializable
+enum class BlendModeKind { NORMAL, ADD, SCREEN, MULTIPLY, OVERLAY }
+
+@Serializable
+data class LayerEffects(
+    val shadowRadius: Float = 0f,
+    val shadowDx: Float = 0f,
+    val shadowDy: Float = 12f,
+    val shadowColorHex: Long = 0xAA000000,
+    val blurRadius: Float = 0f,
+    val blendMode: BlendModeKind = BlendModeKind.NORMAL
+)
+
+@Serializable
 data class Keyframe(val timeMs: Long, val value: Float, val easing: EasingType = EasingType.EASE_IN_OUT)
 
 @Serializable
@@ -41,6 +54,7 @@ sealed interface Layer {
     val startTimeMs: Long
     val durationMs: Long
     val transform: TransformTrack
+    val effects: LayerEffects
 
     @Serializable @SerialName("text")
     data class TextLayer(
@@ -49,6 +63,7 @@ sealed interface Layer {
         override val startTimeMs: Long = 0L,
         override val durationMs: Long = 3000L,
         override val transform: TransformTrack = TransformTrack(),
+        override val effects: LayerEffects = LayerEffects(),
         val text: String = "Hello Motion",
         val fontSizeSp: Float = 64f,
         val colorHex: Long = 0xFFFFFFFF
@@ -61,6 +76,7 @@ sealed interface Layer {
         override val startTimeMs: Long = 0L,
         override val durationMs: Long = 3000L,
         override val transform: TransformTrack = TransformTrack(),
+        override val effects: LayerEffects = LayerEffects(),
         val kind: ShapeKind = ShapeKind.ROUNDED_RECT,
         val widthPx: Float = 300f,
         val heightPx: Float = 300f,
@@ -75,6 +91,7 @@ sealed interface Layer {
         override val startTimeMs: Long = 0L,
         override val durationMs: Long = 3000L,
         override val transform: TransformTrack = TransformTrack(),
+        override val effects: LayerEffects = LayerEffects(),
         val uriString: String,
         val widthPx: Float = 400f,
         val heightPx: Float = 400f
