@@ -15,6 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -195,6 +197,16 @@ fun MotionEditorScreen() {
             } else {
                 Canvas(
                     Modifier
+                        .pointerInput(selectedLayerId, currentTimeMs, selectedEasing) {
+                            detectTransformGestures { _, pan, zoom, rotation ->
+                                if (size.width > 0 && size.height > 0 && selectedLayerId != null) {
+                                    isPlaying = false
+                                    val dx = pan.x * (project.widthPx.toFloat() / size.width)
+                                    val dy = pan.y * (project.heightPx.toFloat() / size.height)
+                                    updateSelectedLayer { it.withGestureDelta(currentTimeMs, dx, dy, zoom, rotation, selectedEasing) }
+                                }
+                            }
+                        }
                         .fillMaxHeight()
                         .aspectRatio(project.widthPx.toFloat() / project.heightPx.toFloat())
                         .clip(RoundedCornerShape(14.dp))
