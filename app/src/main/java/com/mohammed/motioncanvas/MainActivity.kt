@@ -11,9 +11,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -47,6 +49,31 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun ColorSwatchRow(label: String, selectedHex: Long, onSelect: (Long) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(42.dp))
+        SWATCH_COLORS.forEach { hex ->
+            val isSelected = hex == selectedHex
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(Color(hex.toInt()))
+                    .border(
+                        width = if (isSelected) 2.5.dp else 1.dp,
+                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.3f),
+                        shape = CircleShape
+                    )
+                    .clickable { onSelect(hex) }
+            )
+        }
+    }
+}
+@Composable
 fun MotionEditorScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -60,30 +87,25 @@ fun MotionEditorScreen() {
     var showJson by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableStateOf<Float?>(null) }
 
-    fun updateProject(newProject: Project) {
-        project = newProject
-        ProjectStorage.saveAuto(context, newProject)
+    fun updateProject(newProject: Project) { project = newProject; ProjectStorage.saveAuto(context, newProject) }
+    fun updateSelectedLayer(transformFn: (Layer) -> Layer) {
+        val id = selectedLayerId ?: return
+        updateProject(project.copy(layers = project.layers.map { if (it.id == id) transformFn(it) else it }))
     }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             val newLayer = Layer.ImageLayer(name = "Image ${project.layers.size + 1}", uriString = uri.toString())
-            updateProject(project.copy(layers = project.layers + newLayer))
-            selectedLayerId = newLayer.id
+            updateProject(project.copy(layers = project.layers + newLayer)); selectedLayerId = newLayer.id
         }
     }
-
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null && ProjectStorage.exportToUri(context, uri, project)) Toast.makeText(context, "JSON saved!", Toast.LENGTH_SHORT).show()
     }
-
     val importJson = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val loaded = uri?.let { ProjectStorage.importFromUri(context, it) }
-        if (loaded != null) {
-            updateProject(loaded); selectedLayerId = loaded.layers.firstOrNull()?.id; currentTimeMs = 0L
-            Toast.makeText(context, "Project loaded!", Toast.LENGTH_SHORT).show()
-        }
+        if (loaded != null) { updateProject(loaded); selectedLayerId = loaded.layers.firstOrNull()?.id; currentTimeMs = 0L; Toast.makeText(context, "Project loaded!", Toast.LENGTH_SHORT).show() }
     }
 
     LaunchedEffect(isPlaying) {
@@ -95,32 +117,28 @@ fun MotionEditorScreen() {
             lastNanos = now
         }
     }
+
     val selectedLayer = project.layers.find { it.id == selectedLayerId }
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(12.dp)) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(
-                enabled = exportProgress == null,
-                onClick = {
-                    isPlaying = false
-                    exportProgress = 0f
-                    scope.launch {
-                        val res = VideoExporter.exportToMp4(context, project) { p -> exportProgress = p }
-                        exportProgress = null
-                        res.onSuccess { path -> Toast.makeText(context, "Saved: $path", Toast.LENGTH_LONG).show() }
-                           .onFailure { err -> Toast.makeText(context, "Export error: ${err.message}", Toast.LENGTH_LONG).show() }
-                    }
+            Button(enabled = exportProgress == null, onClick = {
+                isPlaying = false; exportProgress = 0f
+                scope.launch {
+                    val res = VideoExporter.exportToMp4(context, project) { p -> exportProgress = p }
+                    exportProgress = null
+                    res.onSuccess { path -> Toast.makeText(context, "Saved: $path", Toast.LENGTH_LONG).show() }
+                       .onFailure { err -> Toast.makeText(context, "Export error: ${err.message}", Toast.LENGTH_LONG).show() }
                 }
-            ) { Text(if (exportProgress != null) "Exporting ${(exportProgress!! * 100).toInt()}%" else "Export MP4") }
+            }) { Text(if (exportProgress != null) "Exporting ${(exportProgress!! * 100).toInt()}%" else "Export MP4") }
             OutlinedButton(onClick = { exportJson.launch("${project.title}.json") }) { Text("Save JSON") }
             OutlinedButton(onClick = { importJson.launch(arrayOf("application/json", "*/*")) }) { Text("Load JSON") }
             OutlinedButton(onClick = { showJson = !showJson }) { Text(if (showJson) "Canvas" else "Code") }
             OutlinedButton(onClick = { val d = Project.sampleDemo(); updateProject(d); selectedLayerId = d.layers.firstOrNull()?.id }) { Text("Reset") }
         }
-        if (exportProgress != null) {
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(progress = { exportProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
-        }
-        Spacer(Modifier.height(8.dp))
+        if (exportProgress != null) { Spacer(Modifier.height(6.dp)); LinearProgressIndicator(progress = { exportProgress ?: 0f }, modifier = Modifier.fillMaxWidth()) }
+        Spacer(Modifier.height(6.dp))
+        ColorSwatchRow("Stage", project.backgroundColorHex) { hex -> updateProject(project.copy(backgroundColorHex = hex)) }
+        Spacer(Modifier.height(6.dp))
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (showJson) {
                 Text(remember(project) { project.toJson() }, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
@@ -131,10 +149,10 @@ fun MotionEditorScreen() {
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = { isPlaying = !isPlaying }) { Text(if (isPlaying) "Pause" else "Play") }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
             Text(String.format("%.2fs / %.2fs", currentTimeMs / 1000f, project.durationMs / 1000f), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.width(8.dp))
             Slider(value = currentTimeMs.toFloat(), onValueChange = { isPlaying = false; currentTimeMs = it.toLong() }, valueRange = 0f..project.durationMs.toFloat(), modifier = Modifier.weight(1f))
@@ -144,17 +162,30 @@ fun MotionEditorScreen() {
             FilledTonalButton(onClick = { val l = Layer.ShapeLayer(name = "Shape ${project.layers.size + 1}"); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }) { Text("+ Shape") }
             FilledTonalButton(onClick = { imagePicker.launch(arrayOf("image/*")) }) { Text("+ Image") }
         }
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             project.layers.forEach { layer -> FilterChip(selected = layer.id == selectedLayerId, onClick = { selectedLayerId = layer.id }, label = { Text(layer.name) }) }
+            if (selectedLayer != null) {
+                OutlinedButton(onClick = { updateProject(project.moveLayer(selectedLayer.id, 1)) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Front") }
+                OutlinedButton(onClick = { updateProject(project.moveLayer(selectedLayer.id, -1)) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Back") }
+            }
         }
         if (selectedLayer != null) {
             val eval = KeyframeInterpolator.evaluateTrack(selectedLayer.transform, (currentTimeMs - selectedLayer.startTimeMs).coerceIn(0L, selectedLayer.durationMs))
             val curVal = when (selectedProp) { TrackProperty.X -> eval.x; TrackProperty.Y -> eval.y; TrackProperty.SCALE -> eval.scaleX; TrackProperty.ROTATION -> eval.rotation; TrackProperty.OPACITY -> eval.opacity }
-            Column(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(10.dp)) {
+            Column(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(8.dp)) {
                 if (selectedLayer is Layer.TextLayer) {
-                    OutlinedTextField(value = selectedLayer.text, onValueChange = { txt -> updateProject(project.copy(layers = project.layers.map { if (it.id == selectedLayer.id) selectedLayer.copy(text = txt) else it })) }, label = { Text("Text") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(value = selectedLayer.text, onValueChange = { txt -> updateSelectedLayer { selectedLayer.copy(text = txt) } }, label = { Text("Text") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Size: ${selectedLayer.fontSizeSp.toInt()}sp", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(80.dp))
+                        Slider(value = selectedLayer.fontSizeSp, onValueChange = { sz -> updateSelectedLayer { it.withFontSize(sz) } }, valueRange = 18f..160f, modifier = Modifier.weight(1f))
+                    }
+                    ColorSwatchRow("Color", selectedLayer.colorHex) { hex -> updateSelectedLayer { it.withColor(hex) } }
+                } else if (selectedLayer is Layer.ShapeLayer) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ShapeKind.entries.forEach { kind -> FilterChip(selected = selectedLayer.kind == kind, onClick = { updateSelectedLayer { it.withShapeKind(kind) } }, label = { Text(kind.name.replace("_", " ")) }) }
+                    }
+                    ColorSwatchRow("Color", selectedLayer.colorHex) { hex -> updateSelectedLayer { it.withColor(hex) } }
                 }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     TrackProperty.entries.forEach { p -> FilterChip(selected = selectedProp == p, onClick = { selectedProp = p }, label = { Text(p.label) }) }
@@ -162,11 +193,11 @@ fun MotionEditorScreen() {
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("${selectedProp.label}: ${String.format("%.1f", curVal)}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(105.dp))
-                    Slider(value = curVal.coerceIn(selectedProp.min, selectedProp.max), onValueChange = { v -> isPlaying = false; val u = selectedLayer.withUpdatedTrack(selectedProp, currentTimeMs, v, selectedEasing); updateProject(project.copy(layers = project.layers.map { if (it.id == selectedLayer.id) u else it })) }, valueRange = selectedProp.min..selectedProp.max, modifier = Modifier.weight(1f))
+                    Slider(value = curVal.coerceIn(selectedProp.min, selectedProp.max), onValueChange = { v -> isPlaying = false; updateSelectedLayer { it.withUpdatedTrack(selectedProp, currentTimeMs, v, selectedEasing) } }, valueRange = selectedProp.min..selectedProp.max, modifier = Modifier.weight(1f))
                 }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     EasingType.entries.forEach { e -> FilterChip(selected = selectedEasing == e, onClick = { selectedEasing = e }, label = { Text(e.name.replace("_", " ")) }) }
-                    TextButton(onClick = { val def = when (selectedProp) { TrackProperty.X -> 540f; TrackProperty.Y -> 960f; TrackProperty.SCALE -> 1f; TrackProperty.ROTATION -> 0f; TrackProperty.OPACITY -> 1f }; val c = selectedLayer.clearKeyframesFor(selectedProp, def); updateProject(project.copy(layers = project.layers.map { if (it.id == selectedLayer.id) c else it })) }) { Text("Clear Keys") }
+                    TextButton(onClick = { val def = when (selectedProp) { TrackProperty.X -> 540f; TrackProperty.Y -> 960f; TrackProperty.SCALE -> 1f; TrackProperty.ROTATION -> 0f; TrackProperty.OPACITY -> 1f }; updateSelectedLayer { it.clearKeyframesFor(selectedProp, def) } }) { Text("Clear Keys") }
                 }
             }
         }
