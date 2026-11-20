@@ -28,7 +28,7 @@ class FrameRenderer(private val context: Context) {
             val tr = KeyframeInterpolator.evaluateTrack(layer.transform, localTime)
             if (tr.opacity <= 0.001f) continue
 
-            canvas.save()
+            val useLayer = layer.effects.blendMode != BlendModeKind.NORMAL || layer.effects.blurRadius > 0.5f; if (useLayer) canvas.saveLayer(null, null) else canvas.save()
             canvas.translate(tr.x, tr.y)
             canvas.rotate(tr.rotation)
             canvas.scale(tr.scaleX, tr.scaleY)
@@ -83,7 +83,7 @@ class FrameRenderer(private val context: Context) {
                 }
             }.getOrNull()
         } ?: return
-        shapePaint.alpha = (opacity * 255).toInt().coerceIn(0, 255)
+        shapePaint.alpha = (opacity * 255).toInt().coerceIn(0, 255); applyEffects(shapePaint, layer.effects, opacity)
         val hw = layer.widthPx / 2f
         val hh = layer.heightPx / 2f
         canvas.drawBitmap(bmp, null, RectF(-hw, -hh, hw, hh), shapePaint)
