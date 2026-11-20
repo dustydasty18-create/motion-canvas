@@ -39,9 +39,6 @@ data class TransformTrack(
 enum class TextStyleKind { BOLD, NORMAL, ITALIC, MONOSPACE }
 
 @Serializable
-enum class TextStyleKind { BOLD, NORMAL, ITALIC, MONOSPACE }
-
-@Serializable
 enum class ShapeKind { RECTANGLE, CIRCLE, ROUNDED_RECT }
 
 @Serializable
