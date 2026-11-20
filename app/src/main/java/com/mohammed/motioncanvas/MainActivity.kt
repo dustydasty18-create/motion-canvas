@@ -91,6 +91,7 @@ fun AlightTouchPad(label: String, onDelta: (Float, Float) -> Unit) {
 
 @Composable
 fun CenterPlayheadTimeline(
+    modifier: Modifier = Modifier,
     project: Project,
     currentTimeMs: Long,
     selectedLayerId: String?,
@@ -102,7 +103,7 @@ fun CenterPlayheadTimeline(
 ) {
     val dur = project.durationMs.coerceAtLeast(1L).toFloat()
     val pxPerMs = 0.07f
-    Row(modifier = Modifier.fillMaxWidth().weight(1f).background(AmPanel, RoundedCornerShape(14.dp)).border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(14.dp)).padding(6.dp)) {
+    Row(modifier = modifier.fillMaxWidth().background(AmPanel, RoundedCornerShape(14.dp)).border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(14.dp)).padding(6.dp)) {
         // Left Gutter: Eye & Lock icons
         Column(modifier = Modifier.width(68.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Spacer(Modifier.height(14.dp))
@@ -255,6 +256,7 @@ fun MotionEditorScreen() {
             }
             Spacer(Modifier.height(4.dp))
             CenterPlayheadTimeline(
+                modifier = Modifier.weight(1f),
                 project = project,
                 currentTimeMs = currentTimeMs,
                 selectedLayerId = selectedLayerId,
