@@ -1,4 +1,5 @@
 package com.mohammed.motioncanvas
+import com.mohammed.motioncanvas.data.*
 import com.mohammed.motioncanvas.model.TextStyleKind
 
 import android.content.Intent
