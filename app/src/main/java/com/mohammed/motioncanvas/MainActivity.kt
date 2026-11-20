@@ -14,6 +14,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -191,7 +193,24 @@ fun MotionEditorScreen() {
             if (showJson) {
                 Text(remember(project) { project.toJson() }, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()))
             } else {
-                Canvas(Modifier.fillMaxHeight().aspectRatio(project.widthPx.toFloat() / project.heightPx.toFloat()).clip(RoundedCornerShape(14.dp)).border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(14.dp)).background(Color.Black)) {
+                Canvas(
+                    Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(project.widthPx.toFloat() / project.heightPx.toFloat())
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                        .background(Color.Black)
+                        .pointerInput(selectedLayerId, currentTimeMs, selectedEasing) {
+                            detectTransformGestures { _, pan, zoom, rotation ->
+                                if (size.width > 0 && size.height > 0 && selectedLayerId != null) {
+                                    isPlaying = false
+                                    val dx = pan.x * (project.widthPx.toFloat() / size.width)
+                                    val dy = pan.y * (project.heightPx.toFloat() / size.height)
+                                    updateSelectedLayer { it.withGestureDelta(currentTimeMs, dx, dy, zoom, rotation, selectedEasing) }
+                                }
+                            }
+                        }
+                ) {
                     val sx = size.width / project.widthPx.toFloat(); val sy = size.height / project.heightPx.toFloat()
                     drawIntoCanvas { c -> c.nativeCanvas.save(); c.nativeCanvas.scale(sx, sy); renderer.renderFrame(c.nativeCanvas, project, currentTimeMs); c.nativeCanvas.restore() }
                 }
