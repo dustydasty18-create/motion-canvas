@@ -1,6 +1,7 @@
+package com.mohammed.motioncanvas.engine
+
 import com.mohammed.motioncanvas.model.BlendModeKind
 import com.mohammed.motioncanvas.model.LayerEffects
-package com.mohammed.motioncanvas.engine
 
 import android.content.Context
 import android.graphics.*
