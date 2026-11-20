@@ -267,13 +267,13 @@ fun MotionEditorScreen() {
                         Slider(value = selectedLayer.fontSizeSp, onValueChange = { sz -> updateSelectedLayer { it.withFontSize(sz) } }, valueRange = 18f..160f, modifier = Modifier.weight(1f))
                     }
                     ColorSwatchRow("Color", selectedLayer.colorHex) { hex -> updateSelectedLayer { it.withColor(hex) } }
-                if (selectedLayer is Layer.ShapeLayer) { Row(verticalAlignment = Alignment.CenterVertically) { Text("Stroke: ${selectedLayer.strokeWidthPx.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(72.dp)); Slider(value = selectedLayer.strokeWidthPx, onValueChange = { sw -> updateSelectedLayer { it.withShapeStroke(strokeWidthPx = sw) } }, valueRange = 0f..24f, modifier = Modifier.weight(1f)) }; if (selectedLayer.strokeWidthPx > 0.5f) { ColorSwatchRow("Border", selectedLayer.strokeColorHex) { hex -> updateSelectedLayer { it.withShapeStroke(strokeColorHex = hex) } } } }
                 if (selectedLayer is Layer.TextLayer) { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) { TextStyleKind.entries.forEach { ts -> FilterChip(selected = selectedLayer.textStyle == ts, onClick = { updateSelectedLayer { it.withTextStyle(textStyle = ts) } }, label = { Text(ts.name) }) } } }
                 } else if (selectedLayer is Layer.ShapeLayer) {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ShapeKind.entries.forEach { kind -> FilterChip(selected = selectedLayer.kind == kind, onClick = { updateSelectedLayer { it.withShapeKind(kind) } }, label = { Text(kind.name.replace("_", " ")) }) }
                     }
                     ColorSwatchRow("Color", selectedLayer.colorHex) { hex -> updateSelectedLayer { it.withColor(hex) } }
+                if (selectedLayer is Layer.ShapeLayer) { Row(verticalAlignment = Alignment.CenterVertically) { Text("Stroke: ${selectedLayer.strokeWidthPx.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(72.dp)); Slider(value = selectedLayer.strokeWidthPx, onValueChange = { sw -> updateSelectedLayer { it.withShapeStroke(strokeWidthPx = sw) } }, valueRange = 0f..24f, modifier = Modifier.weight(1f)) }; if (selectedLayer.strokeWidthPx > 0.5f) { ColorSwatchRow("Border", selectedLayer.strokeColorHex) { hex -> updateSelectedLayer { it.withShapeStroke(strokeColorHex = hex) } } } }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Shadow: ${selectedLayer.effects.shadowRadius.toInt()}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(72.dp))
