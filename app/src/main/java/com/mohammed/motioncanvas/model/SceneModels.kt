@@ -36,6 +36,12 @@ data class TransformTrack(
 )
 
 @Serializable
+enum class TextStyleKind { BOLD, NORMAL, ITALIC, MONOSPACE }
+
+@Serializable
+enum class TextStyleKind { BOLD, NORMAL, ITALIC, MONOSPACE }
+
+@Serializable
 enum class ShapeKind { RECTANGLE, CIRCLE, ROUNDED_RECT }
 
 @Serializable
@@ -66,7 +72,9 @@ sealed interface Layer {
         override val effects: LayerEffects = LayerEffects(),
         val text: String = "Hello Motion",
         val fontSizeSp: Float = 64f,
-        val colorHex: Long = 0xFFFFFFFF
+        val textStyle: TextStyleKind = TextStyleKind.BOLD,
+        val colorHex: Long = 0xFFFFFFFF,
+        val textStyle: TextStyleKind = TextStyleKind.BOLD
     ) : Layer
 
     @Serializable @SerialName("shape")
@@ -81,7 +89,11 @@ sealed interface Layer {
         val widthPx: Float = 300f,
         val heightPx: Float = 300f,
         val cornerRadiusPx: Float = 36f,
-        val colorHex: Long = 0xFF3B82F6
+        val strokeWidthPx: Float = 0f,
+        val strokeColorHex: Long = 0xFFFFFFFF,
+        val colorHex: Long = 0xFF3B82F6,
+        val strokeWidthPx: Float = 0f,
+        val strokeColorHex: Long = 0xFFFFFFFF
     ) : Layer
 
     @Serializable @SerialName("image")

@@ -1,4 +1,5 @@
 package com.mohammed.motioncanvas.engine
+import com.mohammed.motioncanvas.model.TextStyleKind
 
 import com.mohammed.motioncanvas.model.BlendModeKind
 import com.mohammed.motioncanvas.model.LayerEffects
@@ -66,11 +67,13 @@ class FrameRenderer(private val context: Context) {
             ShapeKind.ROUNDED_RECT -> canvas.drawRoundRect(rect, layer.cornerRadiusPx, layer.cornerRadiusPx, shapePaint)
             ShapeKind.CIRCLE -> canvas.drawCircle(0f, 0f, min(hw, hh), shapePaint)
         }
+        if (layer.strokeWidthPx > 0.5f) { shapePaint.style = Paint.Style.STROKE; shapePaint.strokeWidth = layer.strokeWidthPx; shapePaint.color = applyAlpha(layer.strokeColorHex.toInt(), opacity); shapePaint.clearShadowLayer(); when (layer.kind) { ShapeKind.RECTANGLE -> canvas.drawRect(rect, shapePaint); ShapeKind.ROUNDED_RECT -> canvas.drawRoundRect(rect, layer.cornerRadiusPx, layer.cornerRadiusPx, shapePaint); ShapeKind.CIRCLE -> canvas.drawCircle(0f, 0f, min(hw, hh), shapePaint) }; shapePaint.style = Paint.Style.FILL }
     }
 
     private fun drawText(canvas: Canvas, layer: Layer.TextLayer, opacity: Float) {
         textPaint.color = applyAlpha(layer.colorHex.toInt(), opacity); applyEffects(textPaint, layer.effects, opacity)
         textPaint.textSize = layer.fontSizeSp * 2.5f
+        textPaint.typeface = when (layer.textStyle) { TextStyleKind.BOLD -> Typeface.create(Typeface.DEFAULT, Typeface.BOLD); TextStyleKind.NORMAL -> Typeface.create(Typeface.DEFAULT, Typeface.NORMAL); TextStyleKind.ITALIC -> Typeface.create(Typeface.DEFAULT, Typeface.ITALIC); TextStyleKind.MONOSPACE -> Typeface.create(Typeface.MONOSPACE, Typeface.BOLD) }
         val fm = textPaint.fontMetrics
         val baselineOffset = -(fm.ascent + fm.descent) / 2f
         canvas.drawText(layer.text, 0f, baselineOffset, textPaint)
