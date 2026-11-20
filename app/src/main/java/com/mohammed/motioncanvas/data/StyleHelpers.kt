@@ -56,3 +56,17 @@ fun Layer.withShapeStroke(strokeWidthPx: Float? = null, strokeColorHex: Long? = 
         strokeWidthPx = strokeWidthPx ?: this.strokeWidthPx,
         strokeColorHex = strokeColorHex ?: this.strokeColorHex
     ) else this
+
+fun Layer.withAeProps(
+    visible: Boolean? = null,
+    locked: Boolean? = null,
+    parentId: String? = this.parentId,
+    anchorX: Float? = null,
+    anchorY: Float? = null,
+    skewX: Float? = null,
+    skewY: Float? = null
+): Layer = when (this) {
+    is Layer.TextLayer -> copy(visible = visible ?: this.visible, locked = locked ?: this.locked, parentId = parentId, anchorX = anchorX ?: this.anchorX, anchorY = anchorY ?: this.anchorY, skewX = skewX ?: this.skewX, skewY = skewY ?: this.skewY)
+    is Layer.ShapeLayer -> copy(visible = visible ?: this.visible, locked = locked ?: this.locked, parentId = parentId, anchorX = anchorX ?: this.anchorX, anchorY = anchorY ?: this.anchorY, skewX = skewX ?: this.skewX, skewY = skewY ?: this.skewY)
+    is Layer.ImageLayer -> copy(visible = visible ?: this.visible, locked = locked ?: this.locked, parentId = parentId, anchorX = anchorX ?: this.anchorX, anchorY = anchorY ?: this.anchorY, skewX = skewX ?: this.skewX, skewY = skewY ?: this.skewY)
+}

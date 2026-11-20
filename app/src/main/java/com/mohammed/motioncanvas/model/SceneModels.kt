@@ -58,6 +58,13 @@ sealed interface Layer {
     val durationMs: Long
     val transform: TransformTrack
     val effects: LayerEffects
+    val visible: Boolean get() = true
+    val locked: Boolean get() = false
+    val parentId: String? get() = null
+    val anchorX: Float get() = 0f
+    val anchorY: Float get() = 0f
+    val skewX: Float get() = 0f
+    val skewY: Float get() = 0f
 
     @Serializable @SerialName("text")
     data class TextLayer(
@@ -67,6 +74,13 @@ sealed interface Layer {
         override val durationMs: Long = 3000L,
         override val transform: TransformTrack = TransformTrack(),
         override val effects: LayerEffects = LayerEffects(),
+    override val visible: Boolean = true,
+    override val locked: Boolean = false,
+    override val parentId: String? = null,
+    override val anchorX: Float = 0f,
+    override val anchorY: Float = 0f,
+    override val skewX: Float = 0f,
+    override val skewY: Float = 0f,
         val text: String = "Hello Motion",
         val fontSizeSp: Float = 64f,
         val textStyle: TextStyleKind = TextStyleKind.BOLD,
@@ -81,6 +95,13 @@ sealed interface Layer {
         override val durationMs: Long = 3000L,
         override val transform: TransformTrack = TransformTrack(),
         override val effects: LayerEffects = LayerEffects(),
+    override val visible: Boolean = true,
+    override val locked: Boolean = false,
+    override val parentId: String? = null,
+    override val anchorX: Float = 0f,
+    override val anchorY: Float = 0f,
+    override val skewX: Float = 0f,
+    override val skewY: Float = 0f,
         val kind: ShapeKind = ShapeKind.ROUNDED_RECT,
         val widthPx: Float = 300f,
         val heightPx: Float = 300f,
@@ -98,6 +119,13 @@ sealed interface Layer {
         override val durationMs: Long = 3000L,
         override val transform: TransformTrack = TransformTrack(),
         override val effects: LayerEffects = LayerEffects(),
+    override val visible: Boolean = true,
+    override val locked: Boolean = false,
+    override val parentId: String? = null,
+    override val anchorX: Float = 0f,
+    override val anchorY: Float = 0f,
+    override val skewX: Float = 0f,
+    override val skewY: Float = 0f,
         val uriString: String,
         val widthPx: Float = 400f,
         val heightPx: Float = 400f

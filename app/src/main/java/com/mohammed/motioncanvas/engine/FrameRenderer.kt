@@ -23,7 +23,20 @@ class FrameRenderer(private val context: Context) {
     fun renderFrame(canvas: Canvas, project: Project, timeMs: Long) {
         canvas.drawColor(project.backgroundColorHex.toInt())
 
+        fun applyParentChain(l: Layer, depth: Int = 0) {
+            if (depth > 8) return
+            val pid = l.parentId ?: return
+            val parent = project.layers.find { it.id == pid } ?: return
+            applyParentChain(parent, depth + 1)
+            val pt = KeyframeInterpolator.evaluateTrack(parent.transform, (timeMs - parent.startTimeMs).coerceIn(0L, parent.durationMs))
+            canvas.translate(pt.x, pt.y)
+            canvas.rotate(pt.rotation)
+            canvas.scale(pt.scaleX, pt.scaleY)
+            canvas.skew(parent.skewX, parent.skewY)
+            canvas.translate(-parent.anchorX, -parent.anchorY)
+        }
         for (layer in project.layers) {
+            if (!layer.visible) continue
             val localTime = timeMs - layer.startTimeMs
             if (localTime < 0L || localTime > layer.durationMs) continue
 
@@ -31,9 +44,12 @@ class FrameRenderer(private val context: Context) {
             if (tr.opacity <= 0.001f) continue
 
             val useLayer = layer.effects.blendMode != BlendModeKind.NORMAL || layer.effects.blurRadius > 0.5f; if (useLayer) canvas.saveLayer(null, null) else canvas.save()
+            applyParentChain(layer)
             canvas.translate(tr.x, tr.y)
             canvas.rotate(tr.rotation)
             canvas.scale(tr.scaleX, tr.scaleY)
+            canvas.skew(layer.skewX, layer.skewY)
+            canvas.translate(-layer.anchorX, -layer.anchorY)
 
             when (layer) {
                 is Layer.ShapeLayer -> drawShape(canvas, layer, tr.opacity)
