@@ -13,8 +13,17 @@ android {
         applicationId = "com.mohammed.motioncanvas"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-m1"
+        versionCode = 4
+        versionName = "0.4.0-m4"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

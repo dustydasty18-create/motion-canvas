@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import com.mohammed.motioncanvas.data.*
 import com.mohammed.motioncanvas.engine.FrameRenderer
 import com.mohammed.motioncanvas.engine.KeyframeInterpolator
+import com.mohammed.motioncanvas.export.VideoExporter
 import com.mohammed.motioncanvas.model.*
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,6 +49,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MotionEditorScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var project by remember { mutableStateOf(ProjectStorage.loadAuto(context)) }
     val renderer = remember(context) { FrameRenderer(context) }
     var currentTimeMs by remember { mutableLongStateOf(0L) }
@@ -55,6 +58,7 @@ fun MotionEditorScreen() {
     var selectedProp by remember { mutableStateOf(TrackProperty.X) }
     var selectedEasing by remember { mutableStateOf(EasingType.EASE_IN_OUT) }
     var showJson by remember { mutableStateOf(false) }
+    var exportProgress by remember { mutableStateOf<Float?>(null) }
 
     fun updateProject(newProject: Project) {
         project = newProject
@@ -93,11 +97,28 @@ fun MotionEditorScreen() {
     }
     val selectedLayer = project.layers.find { it.id == selectedLayerId }
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(12.dp)) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                enabled = exportProgress == null,
+                onClick = {
+                    isPlaying = false
+                    exportProgress = 0f
+                    scope.launch {
+                        val res = VideoExporter.exportToMp4(context, project) { p -> exportProgress = p }
+                        exportProgress = null
+                        res.onSuccess { path -> Toast.makeText(context, "Saved: $path", Toast.LENGTH_LONG).show() }
+                           .onFailure { err -> Toast.makeText(context, "Export error: ${err.message}", Toast.LENGTH_LONG).show() }
+                    }
+                }
+            ) { Text(if (exportProgress != null) "Exporting ${(exportProgress!! * 100).toInt()}%" else "Export MP4") }
             OutlinedButton(onClick = { exportJson.launch("${project.title}.json") }) { Text("Save JSON") }
             OutlinedButton(onClick = { importJson.launch(arrayOf("application/json", "*/*")) }) { Text("Load JSON") }
             OutlinedButton(onClick = { showJson = !showJson }) { Text(if (showJson) "Canvas" else "Code") }
             OutlinedButton(onClick = { val d = Project.sampleDemo(); updateProject(d); selectedLayerId = d.layers.firstOrNull()?.id }) { Text("Reset") }
+        }
+        if (exportProgress != null) {
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(progress = { exportProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
         }
         Spacer(Modifier.height(8.dp))
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
