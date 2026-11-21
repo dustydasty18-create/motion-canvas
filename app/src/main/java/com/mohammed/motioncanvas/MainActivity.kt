@@ -103,6 +103,7 @@ fun CenterPlayheadTimeline(
 ) {
     val dur = project.durationMs.coerceAtLeast(1L).toFloat()
     val pxPerMs = 0.07f
+    val latestTimeMs by rememberUpdatedState(currentTimeMs)
     Row(modifier = modifier.fillMaxWidth().background(AmPanel, RoundedCornerShape(14.dp)).border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(14.dp)).padding(6.dp)) {
         // Left Gutter: Eye & Lock icons
         Column(modifier = Modifier.width(68.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -123,11 +124,11 @@ fun CenterPlayheadTimeline(
         // Right Track Area: Center-locked playhead + scrolling layer bars
         Box(
             modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(AmBg)
-                .pointerInput(project.durationMs, currentTimeMs) {
+                .pointerInput(project.durationMs) {
                     detectHorizontalDragGestures { change, drag ->
                         change.consume()
                         val deltaMs = (-drag / pxPerMs).toLong()
-                        onScrub((currentTimeMs + deltaMs).coerceIn(0L, project.durationMs))
+                        onScrub((latestTimeMs + deltaMs).coerceIn(0L, project.durationMs))
                     }
                 }
         ) {
@@ -178,7 +179,8 @@ fun MotionEditorScreen() {
     var showJson by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableStateOf<Float?>(null) }
 
-    fun updateProject(p: Project) { project = p; ProjectStorage.saveAuto(context, p) }
+    fun updateProject(p: Project) { project = p }
+    LaunchedEffect(project) { kotlinx.coroutines.delay(600L); kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ProjectStorage.saveAuto(context, project) } }
     fun updateLayerById(id: String, fn: (Layer) -> Layer) { updateProject(project.copy(layers = project.layers.map { if (it.id == id) fn(it) else it })) }
     fun updateSelectedLayer(fn: (Layer) -> Layer) { val id = selectedLayerId ?: return; val l = project.layers.find { it.id == id } ?: return; if (!l.locked) updateLayerById(id, fn) }
 
