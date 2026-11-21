@@ -24,7 +24,7 @@ object VideoExporter {
         runCatching {
             val width = (project.widthPx / 2) * 2
             val height = (project.heightPx / 2) * 2
-            val fps = project.fps.coerceIn(15, 60)
+            val fps = project.fps.coerceIn(15, 120)
             val totalFrames = ((project.durationMs / 1000.0) * fps).toInt().coerceAtLeast(1)
 
             val videoOnlyFile = File(context.cacheDir, "vid_${System.currentTimeMillis()}.mp4")

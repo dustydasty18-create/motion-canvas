@@ -118,3 +118,14 @@ fun Layer.keyframeGlobalTimesFor(prop: com.mohammed.motioncanvas.model.TrackProp
     }
     return list.map { startTimeMs + it.timeMs }.distinct().sorted()
 }
+
+
+fun Layer.withStartTimeMs(newStartMs: Long): Layer {
+    val s = newStartMs.coerceAtLeast(0L)
+    return when (this) {
+        is Layer.TextLayer -> copy(startTimeMs = s)
+        is Layer.ShapeLayer -> copy(startTimeMs = s)
+        is Layer.ImageLayer -> copy(startTimeMs = s)
+        is Layer.VideoLayer -> copy(startTimeMs = s)
+    }
+}
