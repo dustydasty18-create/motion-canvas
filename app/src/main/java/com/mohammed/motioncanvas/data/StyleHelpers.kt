@@ -107,3 +107,14 @@ fun Layer.withUpdatedTrack(
         is Layer.VideoLayer -> copy(transform = tr)
     }
 }
+
+fun Layer.keyframeGlobalTimesFor(prop: com.mohammed.motioncanvas.model.TrackProperty): List<Long> {
+    val list = when (prop) {
+        com.mohammed.motioncanvas.model.TrackProperty.X -> transform.x
+        com.mohammed.motioncanvas.model.TrackProperty.Y -> transform.y
+        com.mohammed.motioncanvas.model.TrackProperty.SCALE -> transform.scaleX
+        com.mohammed.motioncanvas.model.TrackProperty.ROTATION -> transform.rotation
+        com.mohammed.motioncanvas.model.TrackProperty.OPACITY -> transform.opacity
+    }
+    return list.map { startTimeMs + it.timeMs }.distinct().sorted()
+}

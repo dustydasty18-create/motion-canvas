@@ -192,3 +192,11 @@ data class Project(
         )
     }
 }
+
+enum class TrackProperty(val label: String, val min: Float, val max: Float) {
+    X("Pos X", -1500f, 1500f),
+    Y("Pos Y", -2500f, 2500f),
+    SCALE("Scale", 0.05f, 5f),
+    ROTATION("Rotate", -720f, 720f),
+    OPACITY("Opacity", 0f, 1f)
+}
