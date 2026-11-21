@@ -334,7 +334,7 @@ fun MotionEditorScreen() {
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("${selectedProp.label}: ${String.format("%.1f", curVal)}", style = MaterialTheme.typography.labelSmall, color = AmText, modifier = Modifier.width(92.dp))
-                            Slider(value = curVal.coerceIn(selectedProp.min, selectedProp.max), onValueChange = { v -> isPlaying = false; updateSelectedLayer { it.withUpdatedTrack(selectedProp, currentTimeMs, v, selectedEasing) } }, valueRange = selectedProp.min..selectedProp.max, modifier = Modifier.weight(1f).height(24.dp))
+                            Slider(value = curVal.coerceIn(selectedProp.min, selectedProp.max), onValueChange = { v -> isPlaying = false; updateSelectedLayer { it.withUpdatedTrack(selectedProp, currentTimeMs, v, selectedEasing) } }, valueRange = selectedProp.min.toFloat()..selectedProp.max.toFloat(), modifier = Modifier.weight(1f).height(24.dp))
                             Surface(onClick = { isPlaying = false; updateSelectedLayer { it.withUpdatedTrack(selectedProp, currentTimeMs, curVal, selectedEasing) } }, shape = RoundedCornerShape(8.dp), color = AmAmber.copy(alpha = 0.2f), border = BorderStroke(1.dp, AmAmber)) { Text("+◆", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = AmAmber, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)) }
                         }
                         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

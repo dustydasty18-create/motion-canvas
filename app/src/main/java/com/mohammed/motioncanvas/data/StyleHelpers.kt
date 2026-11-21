@@ -74,3 +74,36 @@ fun Layer.withAeProps(
 
 fun Layer.withVideoTrim(trimStartMs: Long? = null, speed: Float? = null): Layer =
     if (this is Layer.VideoLayer) copy(trimStartMs = trimStartMs ?: this.trimStartMs, speed = speed ?: this.speed) else this
+
+fun Layer.withEffects(effects: com.mohammed.motioncanvas.model.LayerEffects): Layer = when (this) {
+    is Layer.TextLayer -> copy(effects = effects)
+    is Layer.ShapeLayer -> copy(effects = effects)
+    is Layer.ImageLayer -> copy(effects = effects)
+    is Layer.VideoLayer -> copy(effects = effects)
+}
+
+fun Layer.withUpdatedTrack(
+    prop: com.mohammed.motioncanvas.model.TrackProperty,
+    globalTimeMs: Long,
+    value: Float,
+    easing: com.mohammed.motioncanvas.model.EasingType
+): Layer {
+    val localMs = (globalTimeMs - startTimeMs).coerceIn(0L, durationMs)
+    fun upsert(list: List<com.mohammed.motioncanvas.model.Keyframe>): List<com.mohammed.motioncanvas.model.Keyframe> {
+        val filtered = list.filterNot { kotlin.math.abs(it.timeMs - localMs) <= 16L }
+        return (filtered + com.mohammed.motioncanvas.model.Keyframe(localMs, value, easing)).sortedBy { it.timeMs }
+    }
+    val tr = when (prop) {
+        com.mohammed.motioncanvas.model.TrackProperty.X -> transform.copy(x = upsert(transform.x))
+        com.mohammed.motioncanvas.model.TrackProperty.Y -> transform.copy(y = upsert(transform.y))
+        com.mohammed.motioncanvas.model.TrackProperty.SCALE -> transform.copy(scaleX = upsert(transform.scaleX), scaleY = upsert(transform.scaleY))
+        com.mohammed.motioncanvas.model.TrackProperty.ROTATION -> transform.copy(rotation = upsert(transform.rotation))
+        com.mohammed.motioncanvas.model.TrackProperty.OPACITY -> transform.copy(opacity = upsert(transform.opacity))
+    }
+    return when (this) {
+        is Layer.TextLayer -> copy(transform = tr)
+        is Layer.ShapeLayer -> copy(transform = tr)
+        is Layer.ImageLayer -> copy(transform = tr)
+        is Layer.VideoLayer -> copy(transform = tr)
+    }
+}
