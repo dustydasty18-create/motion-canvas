@@ -1,5 +1,8 @@
 package com.mohammed.motioncanvas
 
+import com.mohammed.motioncanvas.model.*
+import com.mohammed.motioncanvas.data.*
+
 import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
