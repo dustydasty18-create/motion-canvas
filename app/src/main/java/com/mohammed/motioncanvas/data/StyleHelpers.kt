@@ -32,7 +32,7 @@ fun Project.moveLayer(layerId: String, delta: Int): Project {
 fun Layer.withColor(colorHex: Long): Layer = when (this) {
     is Layer.TextLayer -> copy(colorHex = colorHex)
     is Layer.ShapeLayer -> copy(colorHex = colorHex)
-    is Layer.ImageLayer -> this
+    is Layer.ImageLayer, is Layer.VideoLayer -> this
 }
 
 fun Layer.withFontSize(sizeSp: Float): Layer = when (this) {
@@ -69,4 +69,8 @@ fun Layer.withAeProps(
     is Layer.TextLayer -> copy(visible = visible ?: this.visible, locked = locked ?: this.locked, parentId = parentId, anchorX = anchorX ?: this.anchorX, anchorY = anchorY ?: this.anchorY, skewX = skewX ?: this.skewX, skewY = skewY ?: this.skewY)
     is Layer.ShapeLayer -> copy(visible = visible ?: this.visible, locked = locked ?: this.locked, parentId = parentId, anchorX = anchorX ?: this.anchorX, anchorY = anchorY ?: this.anchorY, skewX = skewX ?: this.skewX, skewY = skewY ?: this.skewY)
     is Layer.ImageLayer -> copy(visible = visible ?: this.visible, locked = locked ?: this.locked, parentId = parentId, anchorX = anchorX ?: this.anchorX, anchorY = anchorY ?: this.anchorY, skewX = skewX ?: this.skewX, skewY = skewY ?: this.skewY)
+    is Layer.VideoLayer -> copy(visible = visible ?: this.visible, locked = locked ?: this.locked, parentId = parentId, anchorX = anchorX ?: this.anchorX, anchorY = anchorY ?: this.anchorY, skewX = skewX ?: this.skewX, skewY = skewY ?: this.skewY)
 }
+
+fun Layer.withVideoTrim(trimStartMs: Long? = null, speed: Float? = null): Layer =
+    if (this is Layer.VideoLayer) copy(trimStartMs = trimStartMs ?: this.trimStartMs, speed = speed ?: this.speed) else this

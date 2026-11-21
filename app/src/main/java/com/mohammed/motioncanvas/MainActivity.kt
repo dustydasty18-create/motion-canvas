@@ -136,7 +136,7 @@ fun CenterPlayheadTimeline(
                 Spacer(Modifier.height(14.dp))
                 project.layers.asReversed().forEach { layer ->
                     val isSel = layer.id == selectedLayerId
-                    val barColor = when (layer) { is Layer.TextLayer -> Color(0xFF2563EB); is Layer.ShapeLayer -> Color(0xFF0D9488); is Layer.ImageLayer -> Color(0xFF7C3AED) }
+                    val barColor = when (layer) { is Layer.TextLayer -> Color(0xFF2563EB); is Layer.ShapeLayer -> Color(0xFF0D9488); is Layer.ImageLayer -> Color(0xFF7C3AED); is Layer.VideoLayer -> Color(0xFFE11D48) }
                     val keys = layer.keyframeGlobalTimesFor(selectedProp)
                     Box(modifier = Modifier.fillMaxWidth().height(28.dp).clickable { onSelectLayer(layer.id) }) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -190,6 +190,18 @@ fun MotionEditorScreen() {
         val mp = mediaPlayer ?: return@LaunchedEffect; val audio = project.audio ?: return@LaunchedEffect
         if (isPlaying) { val t = (currentTimeMs - audio.startTimeMs + audio.trimStartMs).toInt(); if (t >= 0 && t < mp.duration) { mp.setVolume(audio.volume, audio.volume); mp.seekTo(t); mp.start() } } else if (mp.isPlaying) mp.pause()
     }
+        val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            val mmr = runCatching { android.media.MediaMetadataRetriever().apply { setDataSource(context, uri) } }.getOrNull()
+            val rawDur = mmr?.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 5000L
+            runCatching { mmr?.release() }
+            val clipDur = rawDur.coerceIn(500L, 120000L)
+            val newProjDur = maxOf(project.durationMs, clipDur)
+            val l = Layer.VideoLayer(name = "Video ${project.layers.size + 1}", durationMs = clipDur, uriString = uri.toString())
+            updateProject(project.copy(durationMs = newProjDur, layers = project.layers + l)); selectedLayerId = l.id
+        }
+    }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }; val l = Layer.ImageLayer(name = "Image ${project.layers.size + 1}", durationMs = project.durationMs, uriString = uri.toString()); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }
     }
@@ -230,6 +242,10 @@ fun MotionEditorScreen() {
                     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(3000L, 5000L, 8000L, 10000L, 15000L).forEach { dur -> FilterChip(selected = project.durationMs == dur, onClick = { currentTimeMs = currentTimeMs.coerceAtMost(dur); updateProject(project.copy(durationMs = dur)) }, label = { Text("${dur / 1000}s") }) }
                         listOf(24, 30, 60).forEach { f -> FilterChip(selected = project.fps == f, onClick = { updateProject(project.copy(fps = f)) }, label = { Text("${f}fps") }) }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Length: ${project.durationMs / 1000}s", style = MaterialTheme.typography.labelSmall, color = AmText, modifier = Modifier.width(78.dp))
+                        Slider(value = (project.durationMs / 1000f).coerceIn(1f, 120f), onValueChange = { s -> val d = (s.toInt().coerceIn(1, 120)) * 1000L; currentTimeMs = currentTimeMs.coerceAtMost(d); updateProject(project.copy(durationMs = d)) }, valueRange = 1f..120f, modifier = Modifier.weight(1f).height(24.dp))
                     }
                     ColorSwatchRow("Stage", project.backgroundColorHex) { hex -> updateProject(project.copy(backgroundColorHex = hex)) }
                 }
@@ -337,6 +353,16 @@ fun MotionEditorScreen() {
                             ColorSwatchRow("Fill", selectedLayer.colorHex) { hex -> updateSelectedLayer { it.withColor(hex) } }
                             Row(verticalAlignment = Alignment.CenterVertically) { Text("Stroke: ${selectedLayer.strokeWidthPx.toInt()}px", style = MaterialTheme.typography.labelSmall, color = AmText, modifier = Modifier.width(76.dp)); Slider(value = selectedLayer.strokeWidthPx, onValueChange = { sw -> updateSelectedLayer { it.withShapeStroke(strokeWidthPx = sw) } }, valueRange = 0f..24f, modifier = Modifier.weight(1f).height(24.dp)) }
                             if (selectedLayer.strokeWidthPx > 0.5f) ColorSwatchRow("Border", selectedLayer.strokeColorHex) { hex -> updateSelectedLayer { it.withShapeStroke(strokeColorHex = hex) } }
+                        } else if (selectedLayer is Layer.VideoLayer) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Trim In: ${String.format("%.1fs", selectedLayer.trimStartMs / 1000f)}", style = MaterialTheme.typography.labelSmall, color = AmText, modifier = Modifier.width(86.dp))
+                                Slider(value = selectedLayer.trimStartMs.toFloat(), onValueChange = { t -> isPlaying = false; updateSelectedLayer { it.withVideoTrim(trimStartMs = t.toLong()) } }, valueRange = 0f..60000f, modifier = Modifier.weight(1f).height(24.dp))
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Speed: ${String.format("%.2fx", selectedLayer.speed)}", style = MaterialTheme.typography.labelSmall, color = AmText, modifier = Modifier.width(78.dp))
+                                Slider(value = selectedLayer.speed, onValueChange = { sp -> isPlaying = false; updateSelectedLayer { it.withVideoTrim(speed = sp) } }, valueRange = 0.25f..3f, modifier = Modifier.weight(1f).height(24.dp))
+                                OutlinedButton(onClick = { val end = selectedLayer.startTimeMs + selectedLayer.durationMs; updateProject(project.copy(durationMs = end.coerceIn(1000L, 120000L))) }, contentPadding = PaddingValues(horizontal = 8.dp), modifier = Modifier.height(28.dp)) { Text("Fit Len", style = MaterialTheme.typography.labelSmall, color = AmMint) }
+                            }
                         } else Text("Image layer — use Move & Transform or Effects.", style = MaterialTheme.typography.bodySmall, color = AmMuted)
                     }
                     AmTile.EFFECTS -> {
@@ -367,6 +393,7 @@ fun MotionEditorScreen() {
                     Row(modifier = Modifier.background(AmCard, RoundedCornerShape(14.dp)).border(1.dp, AmMint.copy(alpha = 0.4f), RoundedCornerShape(14.dp)).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         FilledTonalButton(onClick = { showAddMenu = false; val l = Layer.ShapeLayer(name = "Shape ${project.layers.size + 1}", durationMs = project.durationMs); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }, contentPadding = PaddingValues(horizontal = 10.dp), modifier = Modifier.height(34.dp)) { Text("Shape", style = MaterialTheme.typography.labelSmall) }
                         FilledTonalButton(onClick = { showAddMenu = false; val l = Layer.TextLayer(name = "Text ${project.layers.size + 1}", text = "New Text", durationMs = project.durationMs); updateProject(project.copy(layers = project.layers + l)); selectedLayerId = l.id }, contentPadding = PaddingValues(horizontal = 10.dp), modifier = Modifier.height(34.dp)) { Text("Text", style = MaterialTheme.typography.labelSmall) }
+                        FilledTonalButton(onClick = { showAddMenu = false; videoPicker.launch(arrayOf("video/*")) }, contentPadding = PaddingValues(horizontal = 10.dp), modifier = Modifier.height(34.dp)) { Text("Video", style = MaterialTheme.typography.labelSmall) }
                         FilledTonalButton(onClick = { showAddMenu = false; imagePicker.launch(arrayOf("image/*")) }, contentPadding = PaddingValues(horizontal = 10.dp), modifier = Modifier.height(34.dp)) { Text("Image", style = MaterialTheme.typography.labelSmall) }
                         FilledTonalButton(onClick = { showAddMenu = false; audioPicker.launch(arrayOf("audio/*")) }, contentPadding = PaddingValues(horizontal = 10.dp), modifier = Modifier.height(34.dp)) { Text("Audio", style = MaterialTheme.typography.labelSmall) }
                     }

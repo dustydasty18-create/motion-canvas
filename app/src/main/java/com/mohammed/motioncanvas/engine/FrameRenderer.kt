@@ -6,6 +6,8 @@ import com.mohammed.motioncanvas.model.LayerEffects
 
 import android.content.Context
 import android.graphics.*
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.net.Uri
 import com.mohammed.motioncanvas.model.Layer
 import com.mohammed.motioncanvas.model.Project
@@ -19,6 +21,9 @@ class FrameRenderer(private val context: Context) {
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val bitmapCache = mutableMapOf<String, Bitmap?>()
+    private val retrieverCache = mutableMapOf<String, MediaMetadataRetriever?>()
+    private var lastVideoKey = ""
+    private var lastVideoBmp: Bitmap? = null
 
     fun renderFrame(canvas: Canvas, project: Project, timeMs: Long) {
         canvas.drawColor(project.backgroundColorHex.toInt())
@@ -55,8 +60,32 @@ class FrameRenderer(private val context: Context) {
                 is Layer.ShapeLayer -> drawShape(canvas, layer, tr.opacity)
                 is Layer.TextLayer -> drawText(canvas, layer, tr.opacity)
                 is Layer.ImageLayer -> drawImage(canvas, layer, tr.opacity)
+                is Layer.VideoLayer -> drawVideo(canvas, layer, localTime, tr.opacity)
             }
             canvas.restore()
+        }
+    }
+
+    
+    private fun drawVideo(canvas: Canvas, layer: Layer.VideoLayer, localTimeMs: Long, opacity: Float) {
+        val retriever = retrieverCache.getOrPut(layer.uriString) {
+            runCatching { MediaMetadataRetriever().apply { setDataSource(context, Uri.parse(layer.uriString)) } }.getOrNull()
+        } ?: return
+        val sourceMs = layer.trimStartMs + (localTimeMs * layer.speed).toLong()
+        val bucketMs = (sourceMs / 33L) * 33L
+        val key = "${layer.uriString}_$bucketMs"
+        val bmp = if (key == lastVideoKey && lastVideoBmp != null) lastVideoBmp else {
+            val f = runCatching { retriever.getFrameAtTime(bucketMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) }.getOrNull()
+            lastVideoKey = key; lastVideoBmp = f; f
+        }
+        if (bmp != null) {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            applyEffects(paint, layer.effects, opacity)
+            val aspect = bmp.width.toFloat() / bmp.height.coerceAtLeast(1).toFloat()
+            val targetH = layer.heightPx
+            val targetW = targetH * aspect
+            val dst = RectF(-targetW / 2f, -targetH / 2f, targetW / 2f, targetH / 2f)
+            canvas.drawBitmap(bmp, null, dst, paint)
         }
     }
 

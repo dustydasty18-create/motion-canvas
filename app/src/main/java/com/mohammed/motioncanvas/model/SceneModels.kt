@@ -130,6 +130,28 @@ sealed interface Layer {
         val widthPx: Float = 400f,
         val heightPx: Float = 400f
     ) : Layer
+
+    @Serializable @SerialName("video")
+    data class VideoLayer(
+        override val id: String = UUID.randomUUID().toString(),
+        override val name: String = "Video",
+        override val startTimeMs: Long = 0L,
+        override val durationMs: Long = 5000L,
+        override val transform: TransformTrack = TransformTrack(),
+        override val effects: LayerEffects = LayerEffects(),
+        override val visible: Boolean = true,
+        override val locked: Boolean = false,
+        override val parentId: String? = null,
+        override val anchorX: Float = 0f,
+        override val anchorY: Float = 0f,
+        override val skewX: Float = 0f,
+        override val skewY: Float = 0f,
+        val uriString: String,
+        val trimStartMs: Long = 0L,
+        val speed: Float = 1f,
+        val widthPx: Float = 1080f,
+        val heightPx: Float = 1920f
+    ) : Layer
 }
 
 @Serializable
