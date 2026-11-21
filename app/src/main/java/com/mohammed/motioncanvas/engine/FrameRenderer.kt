@@ -8,7 +8,6 @@ import android.content.Context
 import android.graphics.*
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.net.Uri
 import com.mohammed.motioncanvas.model.Layer
 import com.mohammed.motioncanvas.model.Project
 import com.mohammed.motioncanvas.model.ShapeKind
