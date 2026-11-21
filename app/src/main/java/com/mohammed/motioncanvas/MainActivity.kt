@@ -312,6 +312,215 @@ fun CenterPlayheadTimeline(
     }
 }
 
+) {
+    var zoomScale by remember { mutableFloatStateOf(1f) }
+    val pxPerMs = 0.08f * zoomScale
+    val latestTimeMs by rememberUpdatedState(currentTimeMs)
+    val latestProject by rememberUpdatedState(project)
+    val latestPxPerMs by rememberUpdatedState(pxPerMs)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .background(AmPanel, RoundedCornerShape(14.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .padding(6.dp)
+    ) {
+        // Left Layer Headers (Eye + Lock)
+        Column(
+            modifier = Modifier
+                .width(68.dp)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(
+                text = "${String.format("%.1f", zoomScale)}x",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = AmMint,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+            project.layers.asReversed().forEach { layer ->
+                val isSel = layer.id == selectedLayerId
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(28.dp)
+                        .background(if (isSel) AmMint.copy(alpha = 0.18f) else AmCard, RoundedCornerShape(6.dp))
+                        .clickable { onSelectLayer(layer.id) }
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (layer.visible) "👁" else "—",
+                        fontSize = 11.sp,
+                        color = if (layer.visible) AmText else AmMuted,
+                        modifier = Modifier.clickable { onToggleVisible(layer.id) }
+                    )
+                    Text(
+                        text = if (layer.locked) "🔒" else "🔓",
+                        fontSize = 11.sp,
+                        modifier = Modifier.clickable { onToggleLock(layer.id) }
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        // Right Pinch-Zoomable Millisecond Timeline & Magnetic Tracks
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        if (zoom != 1f) {
+                            zoomScale = (zoomScale * zoom).coerceIn(0.5f, 50f)
+                        }
+                        if (pan.x != 0f) {
+                            val deltaMs = (-pan.x / latestPxPerMs).toLong()
+                            onScrub((latestTimeMs + deltaMs).coerceIn(0L, latestProject.durationMs))
+                        }
+                    }
+                }
+        ) {
+            // Millisecond / Second Ruler Canvas
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val center = size.width / 2f
+                val stepMs = when {
+                    pxPerMs >= 2.0f -> 10L     // 10ms ticks when zoomed in close
+                    pxPerMs >= 0.5f -> 50L     // 50ms ticks
+                    pxPerMs >= 0.15f -> 250L   // 250ms ticks
+                    else -> 1000L              // 1s ticks
+                }
+                val halfVisibleMs = (center / pxPerMs).toLong() + stepMs * 2
+                val firstTick = ((currentTimeMs - halfVisibleMs).coerceAtLeast(0L) / stepMs) * stepMs
+                val lastTick = (currentTimeMs + halfVisibleMs).coerceAtMost(project.durationMs)
+                var t = firstTick
+                while (t <= lastTick) {
+                    val tx = center + (t - currentTimeMs) * pxPerMs
+                    val isMajor = (t % 1000L == 0L) || (stepMs <= 50L && t % 100L == 0L)
+                    drawLine(
+                        color = Color.White.copy(alpha = if (isMajor) 0.35f else 0.12f),
+                        start = Offset(tx, 0f),
+                        end = Offset(tx, if (isMajor) 14.dp.toPx() else 7.dp.toPx()),
+                        strokeWidth = if (isMajor) 1.5f else 1f
+                    )
+                    t += stepMs
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Spacer(Modifier.height(14.dp))
+                project.layers.asReversed().forEach { layer ->
+                    val isSel = layer.id == selectedLayerId
+                    val barColor = when (layer) {
+                        is Layer.TextLayer -> Color(0xFF2563EB)
+                        is Layer.ShapeLayer -> Color(0xFF0D9488)
+                        is Layer.ImageLayer -> Color(0xFF7C3AED)
+                        is Layer.VideoLayer -> Color(0xFFE11D48)
+                    }
+                    val keys = layer.keyframeGlobalTimesFor(selectedProp)
+                    var dragStartAccum by remember(layer.id) { mutableFloatStateOf(0f) }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(28.dp)
+                            .clickable { onSelectLayer(layer.id) }
+                            .pointerInput(layer.id, layer.locked) {
+                                if (!layer.locked) {
+                                    detectHorizontalDragGestures(
+                                        onDragStart = {
+                                            onSelectLayer(layer.id)
+                                            dragStartAccum = layer.startTimeMs.toFloat()
+                                        },
+                                        onHorizontalDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragStartAccum = (dragStartAccum + dragAmount / latestPxPerMs).coerceAtLeast(0f)
+                                            var candidateMs = dragStartAccum.toLong()
+                                            // Magnetic snap (within 120ms) to end or start of any other layer (e.g. Video 3 after Video 4)
+                                            val snapWindowMs = (12f / latestPxPerMs).toLong().coerceIn(5L, 180L)
+                                            for (other in latestProject.layers) {
+                                                if (other.id != layer.id) {
+                                                    val otherEnd = other.startTimeMs + other.durationMs
+                                                    if (kotlin.math.abs(candidateMs - otherEnd) <= snapWindowMs) {
+                                                        candidateMs = otherEnd
+                                                        break
+                                                    }
+                                                    if (kotlin.math.abs(candidateMs - other.startTimeMs) <= snapWindowMs) {
+                                                        candidateMs = other.startTimeMs
+                                                        break
+                                                    }
+                                                }
+                                            }
+                                            if (candidateMs <= snapWindowMs) candidateMs = 0L
+                                            onMoveLayerStart(layer.id, candidateMs)
+                                        }
+                                    )
+                                }
+                            }
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val center = size.width / 2f
+                            val sx = center + (layer.startTimeMs - currentTimeMs) * pxPerMs
+                            val ex = center + (layer.startTimeMs + layer.durationMs - currentTimeMs) * pxPerMs
+                            drawRoundRect(
+                                barColor.copy(alpha = if (isSel) 0.85f else 0.45f),
+                                Offset(sx, 1f),
+                                Size((ex - sx).coerceAtLeast(10f), size.height - 2f),
+                                CornerRadius(8f, 8f)
+                            )
+                            if (isSel) {
+                                drawRoundRect(
+                                    AmMint,
+                                    Offset(sx, 1f),
+                                    Size((ex - sx).coerceAtLeast(10f), size.height - 2f),
+                                    CornerRadius(8f, 8f),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx())
+                                )
+                            }
+                            val r = 4.5.dp.toPx()
+                            val cy = size.height / 2f
+                            keys.forEach { kt ->
+                                val kx = center + (kt - currentTimeMs) * pxPerMs
+                                val d = Path().apply {
+                                    moveTo(kx, cy - r)
+                                    lineTo(kx + r, cy)
+                                    lineTo(kx, cy + r)
+                                    lineTo(kx - r, cy)
+                                    close()
+                                }
+                                drawPath(d, AmAmber)
+                            }
+                        }
+                        Text(
+                            layer.name + if (layer.parentId != null) " 🔗" else "",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AmText,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(horizontal = 8.dp)
+                        )
+                    }
+                }
+            }
+            // Centered Alight Motion Playhead
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val cx = size.width / 2f
+                drawCircle(AmMint, radius = 5.dp.toPx(), center = Offset(cx, 6.dp.toPx()))
+                drawLine(Color.White, Offset(cx, 6.dp.toPx()), Offset(cx, size.height), strokeWidth = 2.dp.toPx())
+            }
+        }
+    }
+}
+
 
 @Composable
 fun MotionEditorScreen() {
@@ -440,6 +649,13 @@ fun MotionEditorScreen() {
                     if (moved != null && newStart + moved.durationMs > project.durationMs) {
                         updateProject(project.copy(durationMs = newStart + moved.durationMs))
                     }
+                },
+                onMoveLayerStart = { id, newStart ->
+                    updateLayerById(id) { it.withStartTimeMs(newStart) }
+                    val moved = project.layers.find { it.id == id }
+                    if (moved != null && newStart + moved.durationMs > project.durationMs) {
+                        updateProject(project.copy(durationMs = newStart + moved.durationMs))
+                    }
                 }
             )
             Spacer(Modifier.height(52.dp))
@@ -461,7 +677,49 @@ fun MotionEditorScreen() {
                             Surface(onClick = { activeTile = null }, shape = RoundedCornerShape(6.dp), color = AmCard) { Text("‹ Tiles", style = MaterialTheme.typography.labelSmall, color = AmMint, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(activeTile?.title ?: selectedLayer.name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = AmText)
+                                val revLayers = project.layers.asReversed()
+                                val selIdx = revLayers.indexOfFirst { it.id == selectedLayer.id }
+                                if (selIdx > 0) {
+                                    val prevLayer = revLayers[selIdx - 1]
+                                    Surface(
+                                        onClick = {
+                                            val targetStart = prevLayer.startTimeMs + prevLayer.durationMs
+                                            updateLayerById(selectedLayer.id) { it.withStartTimeMs(targetStart) }
+                                            if (targetStart + selectedLayer.durationMs > project.durationMs) {
+                                                updateProject(project.copy(durationMs = targetStart + selectedLayer.durationMs))
+                                            }
+                                            isPlaying = false
+                                            currentTimeMs = targetStart
+                                        },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = AmMint.copy(alpha = 0.2f),
+                                        border = BorderStroke(1.dp, AmMint.copy(alpha = 0.5f))
+                                    ) {
+                                        Text(
+                                            "After ${prevLayer.name}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = AmMint,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    onClick = { isPlaying = false; currentTimeMs = (currentTimeMs - 1L).coerceAtLeast(0L) },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = AmCard
+                                ) {
+                                    Text("-1ms", fontSize = 10.sp, color = AmText, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                                }
+                                Surface(
+                                    onClick = { isPlaying = false; currentTimeMs = (currentTimeMs + 1L).coerceAtMost(project.durationMs) },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = AmCard
+                                ) {
+                                    Text("+1ms", fontSize = 10.sp, color = AmText, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                                }
+                            }
                                 val revLayers = project.layers.asReversed()
                                 val selIdx = revLayers.indexOfFirst { it.id == selectedLayer.id }
                                 if (selIdx > 0) {
